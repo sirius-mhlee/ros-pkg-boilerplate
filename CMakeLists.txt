@@ -2,7 +2,7 @@ cmake_minimum_required(VERSION 3.8)
 project(ros-pkg-boilerplate)
 
 if(NOT CMAKE_CXX_STANDARD)
-  set(CMAKE_CXX_STANDARD 17)
+  set(CMAKE_CXX_STANDARD 20)
 endif()
 
 if(CMAKE_COMPILER_IS_GNUCXX OR CMAKE_CXX_COMPILER_ID MATCHES "Clang")
@@ -17,13 +17,13 @@ find_package(cv_bridge REQUIRED)
 
 find_package(OpenCV REQUIRED)
 
-add_executable(ros-pkg-boilerplate src/main.cpp)
-ament_target_dependencies(ros-pkg-boilerplate rclcpp sensor_msgs cv_bridge)
+add_executable(custom_subscriber src/custom_subscriber.cpp)
+ament_target_dependencies(custom_subscriber rclcpp sensor_msgs cv_bridge)
 
-target_link_libraries(ros-pkg-boilerplate ${OpenCV_LIBS})
+target_link_libraries(custom_subscriber ${OpenCV_LIBS})
 
 install(TARGETS
-  ros-pkg-boilerplate
+  custom_subscriber
   DESTINATION lib/${PROJECT_NAME})
 
 if(BUILD_TESTING)

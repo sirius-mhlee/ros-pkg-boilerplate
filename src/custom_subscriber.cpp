@@ -14,7 +14,7 @@ class CustomSubscriber : public rclcpp::Node {
     rclcpp::Subscription<sensor_msgs::msg::Image>::SharedPtr image_sub_;
     rclcpp::Subscription<sensor_msgs::msg::LaserScan>::SharedPtr scan_sub_;
 
-    class const_info {
+    class ConstInfo {
       public:
         static constexpr const char* NODE_NAME{"custom_subscriber"};
         
@@ -26,46 +26,46 @@ class CustomSubscriber : public rclcpp::Node {
     
   public:
     CustomSubscriber()
-    : rclcpp::Node(const_info::NODE_NAME) {
+    : rclcpp::Node(ConstInfo::NODE_NAME) {
       auto qos = rclcpp::SensorDataQoS();
 
       image_sub_ = create_subscription<sensor_msgs::msg::Image>(
-        const_info::IMAGE_TOPIC, qos,
+        ConstInfo::IMAGE_TOPIC, qos,
         std::bind(&CustomSubscriber::onImage, this, std::placeholders::_1));
 
       scan_sub_ = create_subscription<sensor_msgs::msg::LaserScan>(
-        const_info::SCAN_TOPIC, qos,
+        ConstInfo::SCAN_TOPIC, qos,
         std::bind(&CustomSubscriber::onScan, this, std::placeholders::_1));
 
-      cv::namedWindow(const_info::WINDOW_NAME, cv::WINDOW_NORMAL);
+      cv::namedWindow(ConstInfo::WINDOW_NAME, cv::WINDOW_NORMAL);
 
       RCLCPP_INFO(get_logger(),
       "Subscribed topics:\n  image_topic='%s'\n  scan_topic='%s'",
-      const_info::IMAGE_TOPIC, const_info::SCAN_TOPIC);
+      ConstInfo::IMAGE_TOPIC, ConstInfo::SCAN_TOPIC);
     }
 
     ~CustomSubscriber() override {
-        cv::destroyWindow(const_info::WINDOW_NAME);
+        cv::destroyWindow(ConstInfo::WINDOW_NAME);
     }
 
   private:
-    void onImage(const sensor_msgs::msg::Image::SharedPtr msg) {
+    void onImage(const sensor_msgs::msg::Image::ConstSharedPtr& msg) {
       cv_bridge::CvImageConstPtr cv_ptr_bgr = cv_bridge::toCvShare(msg, sensor_msgs::image_encodings::BGR8);
-      cv::imshow(const_info::WINDOW_NAME, cv_ptr_bgr->image);
+      cv::imshow(ConstInfo::WINDOW_NAME, cv_ptr_bgr->image);
       cv::waitKey(1);
 
       RCLCPP_INFO_THROTTLE(
       get_logger(), *get_clock(), 1000,
       "Image: stamp=%.3f, size=%ux%u, encoding=%s",
-      msg->header.stamp.sec + msg->header.stamp.nanosec / 1e9,
+      rclcpp::Time(msg->header.stamp).seconds(),
       msg->width, msg->height, msg->encoding.c_str());
     }
 
-    void onScan(const sensor_msgs::msg::LaserScan::SharedPtr msg) {
+    void onScan(const sensor_msgs::msg::LaserScan::ConstSharedPtr& msg) {
       RCLCPP_INFO_THROTTLE(
       get_logger(), *get_clock(), 1000,
       "Scan: stamp=%.3f, rays=%zu, angle=[%.3f, %.3f], inc=%.5f, range=[%.2f, %.2f]",
-      msg->header.stamp.sec + msg->header.stamp.nanosec / 1e9,
+      rclcpp::Time(msg->header.stamp).seconds(),
       msg->ranges.size(),
       msg->angle_min, msg->angle_max, msg->angle_increment,
       msg->range_min, msg->range_max);
