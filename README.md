@@ -12,3 +12,5 @@ export FASTRTPS_DEFAULT_PROFILES_FILE=/jazzy_ws/fastdds.xml
 
 ros2 run ros-pkg-boilerplate custom_subscriber
 ```
+
+![result.png](./example/result.png)
