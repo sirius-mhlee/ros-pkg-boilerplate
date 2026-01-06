@@ -3,7 +3,7 @@
 ```shell
 cd /jazzy_ws
 
-source /opt/ros/jazzy/setup.sh
+source /opt/ros/jazzy/setup.bash
 colcon build
 
 source install/local_setup.bash
