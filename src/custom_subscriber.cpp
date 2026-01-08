@@ -11,8 +11,8 @@
 
 class CustomSubscriber : public rclcpp::Node {
   private:
-    rclcpp::Subscription<sensor_msgs::msg::Image>::SharedPtr image_sub_;
-    rclcpp::Subscription<sensor_msgs::msg::LaserScan>::SharedPtr scan_sub_;
+    rclcpp::Subscription<sensor_msgs::msg::Image>::SharedPtr image_sub_{};
+    rclcpp::Subscription<sensor_msgs::msg::LaserScan>::SharedPtr scan_sub_{};
 
     class ConstInfo {
       public:
