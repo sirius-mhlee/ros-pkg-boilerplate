@@ -12,13 +12,17 @@ endif()
 # find dependencies
 find_package(ament_cmake REQUIRED)
 find_package(rclcpp REQUIRED)
+find_package(nav_msgs REQUIRED)
 find_package(sensor_msgs REQUIRED)
+find_package(geometry_msgs REQUIRED)
+find_package(tf2 REQUIRED)
+find_package(tf2_ros REQUIRED)
 find_package(cv_bridge REQUIRED)
 
 find_package(OpenCV REQUIRED)
 
 add_executable(custom_subscriber src/custom_subscriber.cpp)
-ament_target_dependencies(custom_subscriber rclcpp sensor_msgs cv_bridge)
+ament_target_dependencies(custom_subscriber rclcpp nav_msgs sensor_msgs geometry_msgs tf2 tf2_ros cv_bridge)
 
 target_link_libraries(custom_subscriber ${OpenCV_LIBS})
 
