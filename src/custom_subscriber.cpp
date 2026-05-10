@@ -97,7 +97,7 @@ class CustomSubscriber : public rclcpp::Node {
 
   private:
     void onImage(const sensor_msgs::msg::Image::ConstSharedPtr& msg) {
-      cv_bridge::CvImageConstPtr cv_ptr_bgr = cv_bridge::toCvShare(msg, sensor_msgs::image_encodings::BGR8);
+      const cv_bridge::CvImageConstPtr cv_ptr_bgr = cv_bridge::toCvShare(msg, sensor_msgs::image_encodings::BGR8);
       cv::imshow(ConstInfo::IMAGE_WINDOW_NAME, cv_ptr_bgr->image);
       cv::waitKey(1);
 
