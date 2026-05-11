@@ -37,6 +37,7 @@ class CustomSubscriber : public rclcpp::Node {
 
     nav_msgs::msg::MapMetaData map_info_{};
     cv::Mat map_image_{};
+    sensor_msgs::msg::LaserScan::ConstSharedPtr latest_scan_{};
 
     class ConstInfo {
       public:
@@ -53,6 +54,7 @@ class CustomSubscriber : public rclcpp::Node {
         static constexpr const char* MAP_WINDOW_NAME{"Occupancy Grid Map"};
 
         static constexpr const char* MAP_FRAME_NAME{"map"};
+        static constexpr const char* SCAN_FRAME_NAME{"front_3d_lidar"};
         static constexpr const char* ROBOT_FRAME_NAME{"base_link"};
 
         static constexpr int MAP_RENDER_PERIOD_MS{100};
@@ -109,6 +111,8 @@ class CustomSubscriber : public rclcpp::Node {
     }
 
     void onScan(const sensor_msgs::msg::LaserScan::ConstSharedPtr& msg) {
+      latest_scan_ = msg;
+
       RCLCPP_INFO_THROTTLE(
       get_logger(), *get_clock(), ConstInfo::INFO_LOG_PERIOD_MS,
       "Scan: stamp=%.3f, rays=%zu, angle=[%.3f, %.3f], inc=%.5f, range=[%.2f, %.2f]",
@@ -154,6 +158,99 @@ class CustomSubscriber : public rclcpp::Node {
       return std::atan2(siny_cosp, cosy_cosp);
     }
 
+    bool worldToMapPixel(const double world_x, const double world_y, cv::Point& pixel) const {
+      if (map_info_.resolution <= 0.0) {
+        return false;
+      }
+
+      const auto origin_yaw = getYaw(map_info_.origin.orientation);
+      const auto dx = world_x - map_info_.origin.position.x;
+      const auto dy = world_y - map_info_.origin.position.y;
+      const auto cos_yaw = std::cos(-origin_yaw);
+      const auto sin_yaw = std::sin(-origin_yaw);
+      const auto map_x = (cos_yaw * dx - sin_yaw * dy) / map_info_.resolution;
+      const auto map_y = (sin_yaw * dx + cos_yaw * dy) / map_info_.resolution;
+      const auto pixel_x = static_cast<int>(std::lround(map_x));
+      const auto pixel_y = static_cast<int>(map_info_.height - 1) - static_cast<int>(std::lround(map_y));
+
+      if (pixel_x < 0 || pixel_x >= static_cast<int>(map_info_.width)
+        || pixel_y < 0 || pixel_y >= static_cast<int>(map_info_.height)) {
+        return false;
+      }
+
+      pixel = cv::Point(pixel_x, pixel_y);
+      return true;
+    }
+
+    void drawScan(cv::Mat& display_image) {
+      if (!latest_scan_) {
+        return;
+      }
+
+      try {
+        const auto map_to_scan = tf_buffer_->lookupTransform(
+          ConstInfo::MAP_FRAME_NAME, ConstInfo::SCAN_FRAME_NAME, latest_scan_->header.stamp);
+
+        const auto& translation = map_to_scan.transform.translation;
+        const auto scan_yaw = getYaw(map_to_scan.transform.rotation);
+        const auto cos_yaw = std::cos(scan_yaw);
+        const auto sin_yaw = std::sin(scan_yaw);
+
+        for (std::size_t i = 0; i < latest_scan_->ranges.size(); ++i) {
+          const auto range = latest_scan_->ranges[i];
+          if (!std::isfinite(range) || range < latest_scan_->range_min || range > latest_scan_->range_max) {
+            continue;
+          }
+
+          const auto angle = latest_scan_->angle_min + static_cast<double>(i) * latest_scan_->angle_increment;
+          const auto scan_x = range * std::cos(angle);
+          const auto scan_y = range * std::sin(angle);
+          const auto world_x = translation.x + cos_yaw * scan_x - sin_yaw * scan_y;
+          const auto world_y = translation.y + sin_yaw * scan_x + cos_yaw * scan_y;
+
+          cv::Point scan_pixel;
+          if (worldToMapPixel(world_x, world_y, scan_pixel)) {
+            cv::circle(display_image, scan_pixel, 1, cv::Scalar(0, 180, 255), cv::FILLED);
+          }
+        }
+      } catch (const tf2::TransformException& ex) {
+        RCLCPP_WARN_THROTTLE(
+          get_logger(), *get_clock(), ConstInfo::WARN_LOG_PERIOD_MS,
+          "Scan TF lookup failed: %s",
+          ex.what());
+      }
+    }
+
+    void drawRobot(cv::Mat& display_image) {
+      try {
+        const auto map_to_robot = tf_buffer_->lookupTransform(
+          ConstInfo::MAP_FRAME_NAME, ConstInfo::ROBOT_FRAME_NAME, tf2::TimePointZero);
+
+        const auto& translation = map_to_robot.transform.translation;
+        const auto robot_yaw = getYaw(map_to_robot.transform.rotation);
+        const auto cos_yaw = std::cos(robot_yaw);
+        const auto sin_yaw = std::sin(robot_yaw);
+
+        cv::Point robot_center;
+        if (worldToMapPixel(translation.x, translation.y, robot_center)) {
+          cv::circle(display_image, robot_center, 6, cv::Scalar(0, 0, 255), 2);
+        }
+
+        const auto world_x = translation.x + cos_yaw * 0.5;
+        const auto world_y = translation.y + sin_yaw * 0.5;
+
+        cv::Point robot_direction;
+        if (worldToMapPixel(world_x, world_y, robot_direction)) {
+          cv::line(display_image, robot_center, robot_direction, cv::Scalar(0, 0, 255), 2);
+        }
+      } catch (const tf2::TransformException& ex) {
+        RCLCPP_WARN_THROTTLE(
+          get_logger(), *get_clock(), ConstInfo::WARN_LOG_PERIOD_MS,
+          "Robot TF lookup failed: %s",
+          ex.what());
+      }
+    }
+
     void renderMap() {
       if (map_image_.empty()) {
         return;
@@ -162,43 +259,8 @@ class CustomSubscriber : public rclcpp::Node {
       cv::Mat display_image;
       cv::cvtColor(map_image_, display_image, cv::COLOR_GRAY2BGR);
 
-      try {
-        const auto map_to_robot = tf_buffer_->lookupTransform(
-          ConstInfo::MAP_FRAME_NAME, ConstInfo::ROBOT_FRAME_NAME, tf2::TimePointZero);
-
-        const auto& translation = map_to_robot.transform.translation;
-        const auto origin_yaw = getYaw(map_info_.origin.orientation);
-        const auto dx = translation.x - map_info_.origin.position.x;
-        const auto dy = translation.y - map_info_.origin.position.y;
-        const auto cos_yaw = std::cos(-origin_yaw);
-        const auto sin_yaw = std::sin(-origin_yaw);
-        const auto map_x = (cos_yaw * dx - sin_yaw * dy) / map_info_.resolution;
-        const auto map_y = (sin_yaw * dx + cos_yaw * dy) / map_info_.resolution;
-        const auto pixel_x = static_cast<int>(std::lround(map_x));
-        const auto pixel_y = static_cast<int>(map_info_.height - 1) - static_cast<int>(std::lround(map_y));
-
-        if (pixel_x < 0 || pixel_x >= static_cast<int>(map_info_.width)
-          || pixel_y < 0 || pixel_y >= static_cast<int>(map_info_.height)) {
-          RCLCPP_WARN_THROTTLE(
-            get_logger(), *get_clock(), ConstInfo::WARN_LOG_PERIOD_MS,
-            "TF: robot is outside the map, position=[%.3f, %.3f]",
-            translation.x, translation.y);
-        } else {
-          const cv::Point robot_center(pixel_x, pixel_y);
-          const auto robot_yaw = getYaw(map_to_robot.transform.rotation) - origin_yaw;
-          const cv::Point robot_direction(
-            pixel_x + static_cast<int>(std::lround(std::cos(robot_yaw) * 10.0)),
-            pixel_y - static_cast<int>(std::lround(std::sin(robot_yaw) * 10.0)));
-
-          cv::circle(display_image, robot_center, 6, cv::Scalar(0, 0, 255), 2);
-          cv::line(display_image, robot_center, robot_direction, cv::Scalar(0, 0, 255), 2);
-        }
-      } catch (const tf2::TransformException& ex) {
-        RCLCPP_WARN_THROTTLE(
-          get_logger(), *get_clock(), ConstInfo::WARN_LOG_PERIOD_MS,
-          "TF lookup failed: %s",
-          ex.what());
-      }
+      drawScan(display_image);
+      drawRobot(display_image);
 
       cv::imshow(ConstInfo::MAP_WINDOW_NAME, display_image);
       cv::waitKey(1);
