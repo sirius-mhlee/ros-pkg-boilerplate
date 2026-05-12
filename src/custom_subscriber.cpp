@@ -232,9 +232,15 @@ class CustomSubscriber : public rclcpp::Node {
         const auto sin_yaw = std::sin(robot_yaw);
 
         cv::Point robot_center;
-        if (worldToMapPixel(translation.x, translation.y, robot_center)) {
-          cv::circle(display_image, robot_center, 6, cv::Scalar(0, 0, 255), 2);
+        if (!worldToMapPixel(translation.x, translation.y, robot_center)) {
+          RCLCPP_WARN_THROTTLE(
+            get_logger(), *get_clock(), ConstInfo::WARN_LOG_PERIOD_MS,
+            "Robot is outside the map, position=[%.3f, %.3f]",
+            translation.x, translation.y);
+          return;
         }
+
+        cv::circle(display_image, robot_center, 6, cv::Scalar(0, 0, 255), 2);
 
         const auto world_x = translation.x + cos_yaw * 0.5;
         const auto world_y = translation.y + sin_yaw * 0.5;
