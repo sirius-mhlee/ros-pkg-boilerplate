@@ -33,10 +33,11 @@ class CustomSubscriber : public rclcpp::Node {
 
     std::unique_ptr<tf2_ros::Buffer> tf_buffer_{};
     std::shared_ptr<tf2_ros::TransformListener> tf_listener_{};
-    rclcpp::TimerBase::SharedPtr map_render_timer_{};
 
+    rclcpp::TimerBase::SharedPtr map_render_timer_{};
     nav_msgs::msg::MapMetaData map_info_{};
     cv::Mat map_image_{};
+
     sensor_msgs::msg::LaserScan::ConstSharedPtr latest_scan_{};
 
     class ConstInfo {
@@ -80,6 +81,7 @@ class CustomSubscriber : public rclcpp::Node {
 
       tf_buffer_ = std::make_unique<tf2_ros::Buffer>(get_clock());
       tf_listener_ = std::make_shared<tf2_ros::TransformListener>(*tf_buffer_);
+
       map_render_timer_ = create_wall_timer(
         std::chrono::milliseconds(ConstInfo::MAP_RENDER_PERIOD_MS),
         std::bind(&CustomSubscriber::renderMap, this));
